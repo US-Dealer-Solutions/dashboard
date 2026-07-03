@@ -9,18 +9,20 @@ export function num(value: number): string {
 }
 
 /**
- * Best-effort extraction of the dealership/client name from a campaign name.
- * Assumes the common agency convention where the dealership comes first,
- * separated from the campaign description by a delimiter, e.g.
- *   "Toyota of Downtown - Cold Email Q3"  -> "Toyota of Downtown"
- *   "ABC Motors | LinkedIn"               -> "ABC Motors"
- * If no delimiter is found, the full name is returned.
+ * Detects the audience/track a campaign or list targets from its name.
+ * Matches the USDS naming across Instantly and HeyReach, e.g.
+ *   "USDS - F&I / Finance Track (TX dealerships)"  -> "F&I / Finance"
+ *   "USDS - Track B (General Manager)"             -> "General Manager"
+ *   "USDS - Track C (F&I Referral Network)"        -> "Referral Network"
+ * Referral is checked first because those names also contain "F&I".
+ * Falls back to the cleaned campaign name if no known track is found.
  */
-export function parseDealership(campaignName: string): string {
-  const name = (campaignName ?? "").trim();
-  if (!name) return "—";
-  const match = name.split(/\s*[-–—|:/]{1,2}\s*/)[0]?.trim();
-  return match || name;
+export function trackFromName(name: string): string {
+  const n = (name ?? "").toLowerCase();
+  if (/referral/.test(n)) return "Referral Network";
+  if (/general manager|\bgm\b|track b/.test(n)) return "General Manager";
+  if (/f&i|f\/i|finance|track a/.test(n)) return "F&I / Finance";
+  return (name ?? "").trim() || "Other";
 }
 
 export function timeAgo(iso: string | null): string {

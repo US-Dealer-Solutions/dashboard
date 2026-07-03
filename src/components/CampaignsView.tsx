@@ -3,14 +3,15 @@
 import { useMemo } from "react";
 import { Campaign } from "@/lib/types";
 import { num, pct } from "@/lib/format";
-import { PlatformBadge } from "./ui";
+import { PlatformBadge, StatusPill } from "./ui";
 
 export default function CampaignsView({ campaigns }: { campaigns: Campaign[] }) {
-  // Group campaigns by dealership so each client's campaigns sit together.
+  // Group campaigns by audience/track so email + LinkedIn for the same
+  // audience sit together.
   const groups = useMemo(() => {
     const map = new Map<string, Campaign[]>();
     for (const c of campaigns) {
-      const key = c.dealership || "—";
+      const key = c.track || "Other";
       if (!map.has(key)) map.set(key, []);
       map.get(key)!.push(c);
     }
@@ -20,22 +21,23 @@ export default function CampaignsView({ campaigns }: { campaigns: Campaign[] }) 
   if (campaigns.length === 0) {
     return (
       <div className="rounded-xl border border-dashed border-black/15 p-10 text-center text-sm text-slate-500 dark:border-white/15 dark:text-slate-400">
-        No campaigns found yet. Once your Instantly and HeyReach campaigns are
-        live, each dealership’s campaigns and lead counts will appear here.
+        No campaigns or lists found yet. Once your Instantly campaigns and
+        HeyReach lists are created, each audience track and its lead counts will
+        appear here.
       </div>
     );
   }
 
   return (
     <div className="space-y-8">
-      {groups.map(([dealership, list]) => {
+      {groups.map(([track, list]) => {
         const totalLeads = list.reduce((s, c) => s + c.leads, 0);
         return (
-          <section key={dealership} className="space-y-3">
-            {/* Dealership header */}
+          <section key={track} className="space-y-3">
+            {/* Track header */}
             <div className="flex items-baseline justify-between gap-2">
               <h2 className="text-base font-semibold text-slate-900 dark:text-white sm:text-lg">
-                {dealership}
+                {track}
               </h2>
               <span className="text-sm text-slate-500 dark:text-slate-400">
                 {num(totalLeads)} leads · {list.length} campaign
@@ -48,7 +50,7 @@ export default function CampaignsView({ campaigns }: { campaigns: Campaign[] }) 
               <table className="w-full text-sm">
                 <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500 dark:bg-neutral-800 dark:text-slate-400">
                   <tr>
-                    <th className="px-4 py-3 font-medium">Campaign</th>
+                    <th className="px-4 py-3 font-medium">Campaign / List</th>
                     <th className="px-4 py-3 font-medium">Source</th>
                     <th className="px-4 py-3 font-medium">Status</th>
                     <th className="px-4 py-3 text-right font-medium">Leads</th>
@@ -68,23 +70,27 @@ export default function CampaignsView({ campaigns }: { campaigns: Campaign[] }) 
                       <td className="px-4 py-3">
                         <PlatformBadge platform={c.platform} />
                       </td>
-                      <td className="px-4 py-3 text-slate-500 dark:text-slate-400">
-                        {c.status}
+                      <td className="px-4 py-3">
+                        <StatusPill tone={c.staged ? "amber" : "gray"}>
+                          {c.status}
+                        </StatusPill>
                       </td>
                       <td className="px-4 py-3 text-right font-medium tabular-nums">
                         {num(c.leads)}
                       </td>
                       <td className="px-4 py-3 text-right tabular-nums">
-                        {num(c.sent)}
+                        {c.staged ? "—" : num(c.sent)}
                       </td>
                       <td className="px-4 py-3 text-right tabular-nums">
-                        {c.platform === "instantly" ? pct(c.openRate) : "—"}
+                        {c.platform === "instantly" && !c.staged
+                          ? pct(c.openRate)
+                          : "—"}
                       </td>
                       <td className="px-4 py-3 text-right tabular-nums">
-                        {num(c.replies)}
+                        {c.staged ? "—" : num(c.replies)}
                       </td>
                       <td className="px-4 py-3 text-right tabular-nums">
-                        {pct(c.replyRate)}
+                        {c.staged ? "—" : pct(c.replyRate)}
                       </td>
                     </tr>
                   ))}
@@ -103,17 +109,26 @@ export default function CampaignsView({ campaigns }: { campaigns: Campaign[] }) 
                     <div className="font-medium">{c.name}</div>
                     <PlatformBadge platform={c.platform} />
                   </div>
-                  <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-                    {c.status}
+                  <div className="mt-1">
+                    <StatusPill tone={c.staged ? "amber" : "gray"}>
+                      {c.status}
+                    </StatusPill>
                   </div>
                   <div className="mt-3 grid grid-cols-4 gap-2 text-center">
                     <Stat label="Leads" value={num(c.leads)} />
-                    <Stat label="Sent" value={num(c.sent)} />
+                    <Stat label="Sent" value={c.staged ? "—" : num(c.sent)} />
                     <Stat
                       label="Open"
-                      value={c.platform === "instantly" ? pct(c.openRate) : "—"}
+                      value={
+                        c.platform === "instantly" && !c.staged
+                          ? pct(c.openRate)
+                          : "—"
+                      }
                     />
-                    <Stat label="Reply" value={pct(c.replyRate)} />
+                    <Stat
+                      label="Reply"
+                      value={c.staged ? "—" : pct(c.replyRate)}
+                    />
                   </div>
                 </div>
               ))}

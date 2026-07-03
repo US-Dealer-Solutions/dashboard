@@ -4,7 +4,7 @@
 // Note: most list/stat endpoints are POST with a JSON body { offset, limit, ... }.
 
 import { Campaign, Prospect } from "./types";
-import { parseDealership } from "./format";
+import { trackFromName } from "./format";
 
 const BASE = "https://api.heyreach.io/api/public";
 
@@ -52,6 +52,18 @@ interface RawCampaign {
 interface CampaignListResponse {
   totalCount: number;
   items: RawCampaign[];
+}
+
+interface RawList {
+  id: number;
+  name: string;
+  totalItemsCount?: number;
+  campaignIds?: number[];
+}
+
+interface ListGetAllResponse {
+  totalCount: number;
+  items: RawList[];
 }
 
 interface OverallStats {
@@ -107,13 +119,30 @@ async function listRawCampaigns(): Promise<RawCampaign[]> {
   return out;
 }
 
+/** List all lead lists (leads are staged here before a campaign is built). */
+async function listRawLists(): Promise<RawList[]> {
+  const out: RawList[] = [];
+  for (let offset = 0; offset < 5000; offset += 100) {
+    const resp = await post<ListGetAllResponse>("/list/GetAll", {
+      offset,
+      limit: 100,
+    });
+    const items = resp.items ?? [];
+    out.push(...items);
+    if (out.length >= (resp.totalCount ?? out.length) || items.length === 0) break;
+  }
+  return out;
+}
+
 /**
- * Fetch campaigns with per-campaign stats. HeyReach has no per-campaign
- * analytics endpoint, so we call GetOverallStats once per campaign with a
- * campaignIds filter.
+ * Returns HeyReach campaigns (with per-campaign stats) plus lead lists that
+ * aren't yet attached to a campaign, so staged leads still show on the board.
+ * HeyReach has no per-campaign analytics endpoint, so we call GetOverallStats
+ * once per campaign with a campaignIds filter.
  */
 export async function getCampaigns(): Promise<Campaign[]> {
-  const raw = await listRawCampaigns();
+  const [raw, lists] = await Promise.all([listRawCampaigns(), listRawLists()]);
+
   const stats = await Promise.all(
     raw.map((c) =>
       post<OverallStats>("/stats/GetOverallStats", {
@@ -124,7 +153,7 @@ export async function getCampaigns(): Promise<Campaign[]> {
     ),
   );
 
-  return raw.map((c, i) => {
+  const campaigns: Campaign[] = raw.map((c, i) => {
     const s = stats[i].overallStats ?? {};
     const sent = s.messagesSent ?? 0;
     const replies = s.totalMessageReplies ?? 0;
@@ -138,10 +167,11 @@ export async function getCampaigns(): Promise<Campaign[]> {
       0;
     return {
       id: String(c.id),
-      platform: "heyreach" as const,
+      platform: "heyreach",
       name,
-      dealership: parseDealership(name),
+      track: trackFromName(name),
       status: c.status ?? "",
+      staged: false,
       leads,
       sent,
       opens: 0, // not applicable to LinkedIn outreach
@@ -152,6 +182,28 @@ export async function getCampaigns(): Promise<Campaign[]> {
       bounced: 0,
     };
   });
+
+  // Show lists that aren't yet attached to any campaign as "staged" entries.
+  const staged: Campaign[] = lists
+    .filter((l) => !(l.campaignIds && l.campaignIds.length > 0))
+    .map((l) => ({
+      id: `list-${l.id}`,
+      platform: "heyreach",
+      name: l.name ?? "(untitled list)",
+      track: trackFromName(l.name ?? ""),
+      status: "List (staged)",
+      staged: true,
+      leads: l.totalItemsCount ?? 0,
+      sent: 0,
+      opens: 0,
+      replies: 0,
+      connectionsAccepted: 0,
+      openRate: 0,
+      replyRate: 0,
+      bounced: 0,
+    }));
+
+  return [...campaigns, ...staged];
 }
 
 /**

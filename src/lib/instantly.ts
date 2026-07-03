@@ -3,7 +3,7 @@
 // Auth: Authorization: Bearer <API_KEY>  (create at app.instantly.ai → Settings → Integrations → API Keys)
 
 import { Campaign, Prospect } from "./types";
-import { parseDealership } from "./format";
+import { trackFromName } from "./format";
 
 const BASE = "https://api.instantly.ai/api/v2";
 
@@ -74,6 +74,17 @@ interface LeadsListResponse {
   next_starting_after?: string | null;
 }
 
+interface RawCampaignListItem {
+  id: string;
+  name: string;
+  status: number;
+}
+
+interface CampaignListResponse {
+  items: RawCampaignListItem[];
+  next_starting_after?: string | null;
+}
+
 const STATUS_LABEL: Record<number, string> = {
   0: "Draft",
   1: "Active",
@@ -89,31 +100,79 @@ function rate(numerator: number, denominator: number): number {
   return denominator > 0 ? numerator / denominator : 0;
 }
 
-/** Fetch per-campaign analytics and normalize to the shared Campaign shape. */
+/** List every campaign (all statuses, including drafts), following pagination. */
+async function listAllCampaigns(): Promise<RawCampaignListItem[]> {
+  const out: RawCampaignListItem[] = [];
+  let cursor: string | null | undefined;
+  for (let page = 0; page < 20; page++) {
+    const qs = cursor
+      ? `?limit=100&starting_after=${encodeURIComponent(cursor)}`
+      : "?limit=100";
+    const resp = await req<CampaignListResponse>(`/campaigns${qs}`);
+    out.push(...(resp.items ?? []));
+    cursor = resp.next_starting_after;
+    if (!cursor) break;
+  }
+  return out;
+}
+
+/** Count leads assigned to a campaign (drafts have no analytics lead count). */
+async function countLeads(campaignId: string): Promise<number> {
+  let total = 0;
+  let cursor: string | null | undefined;
+  // Cap at 20 pages (2,000 leads) to stay cheap; good enough for a count badge.
+  for (let page = 0; page < 20; page++) {
+    const body: Record<string, unknown> = { campaign: campaignId, limit: 100 };
+    if (cursor) body.starting_after = cursor;
+    const resp = await req<LeadsListResponse>("/leads/list", {
+      method: "POST",
+      body,
+    });
+    total += resp.items?.length ?? 0;
+    cursor = resp.next_starting_after;
+    if (!cursor) break;
+  }
+  return total;
+}
+
+/**
+ * Fetch all campaigns (source of truth = the campaigns list so drafts appear),
+ * merge in analytics for metrics, and resolve a lead count for each.
+ */
 export async function getCampaigns(): Promise<Campaign[]> {
-  // Omitting `id`/`ids` returns analytics for all campaigns.
-  const rows = await req<RawAnalytics[]>("/campaigns/analytics");
-  return rows.map((r) => {
-    const sent = r.emails_sent_count ?? 0;
-    const opens = r.open_count_unique ?? r.open_count ?? 0;
-    const replies = r.reply_count_unique ?? r.reply_count ?? 0;
-    const name = r.campaign_name ?? "(untitled)";
-    return {
-      id: r.campaign_id,
-      platform: "instantly" as const,
-      name,
-      dealership: parseDealership(name),
-      status: STATUS_LABEL[r.campaign_status] ?? String(r.campaign_status ?? ""),
-      leads: r.leads_count ?? 0,
-      sent,
-      opens,
-      replies,
-      connectionsAccepted: 0,
-      openRate: rate(opens, sent),
-      replyRate: rate(replies, sent),
-      bounced: r.bounced_count ?? 0,
-    };
-  });
+  const [list, analytics] = await Promise.all([
+    listAllCampaigns(),
+    req<RawAnalytics[]>("/campaigns/analytics").catch(() => [] as RawAnalytics[]),
+  ]);
+  const byId = new Map(analytics.map((a) => [a.campaign_id, a]));
+
+  return Promise.all(
+    list.map(async (c): Promise<Campaign> => {
+      const a = byId.get(c.id);
+      const sent = a?.emails_sent_count ?? 0;
+      const opens = a?.open_count_unique ?? a?.open_count ?? 0;
+      const replies = a?.reply_count_unique ?? a?.reply_count ?? 0;
+      // Prefer the analytics lead count; fall back to counting leads for drafts.
+      const leads = a?.leads_count ?? (await countLeads(c.id).catch(() => 0));
+      const name = c.name ?? "(untitled)";
+      return {
+        id: c.id,
+        platform: "instantly",
+        name,
+        track: trackFromName(name),
+        status: STATUS_LABEL[c.status] ?? String(c.status ?? ""),
+        staged: false,
+        leads,
+        sent,
+        opens,
+        replies,
+        connectionsAccepted: 0,
+        openRate: rate(opens, sent),
+        replyRate: rate(replies, sent),
+        bounced: a?.bounced_count ?? 0,
+      };
+    }),
+  );
 }
 
 /** List leads matching a server-side filter, following pagination. */
