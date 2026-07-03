@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { DashboardData } from "@/lib/types";
-import { timeAgo } from "@/lib/format";
+import Header from "./Header";
 import OverviewView from "./OverviewView";
 import ProspectsView from "./ProspectsView";
 import CampaignsView from "./CampaignsView";
@@ -41,72 +41,59 @@ export default function DashboardClient() {
   }, [load]);
 
   return (
-    <div className="mx-auto w-full max-w-6xl px-4 py-6 sm:px-6 sm:py-8">
-      {/* Header */}
-      <header className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-xl font-semibold sm:text-2xl">Outreach Dashboard</h1>
-          <p className="text-sm text-gray-500 dark:text-gray-400">
-            {data
-              ? `Live from Instantly + HeyReach · updated ${timeAgo(
-                  data.fetchedAt,
-                )}`
-              : "Instantly + HeyReach analytics"}
-          </p>
-        </div>
-        <button
-          onClick={load}
-          disabled={loading}
-          className="inline-flex items-center justify-center gap-2 rounded-lg bg-black px-4 py-2 text-sm font-medium text-white transition hover:bg-black/80 disabled:opacity-50 dark:bg-white dark:text-black dark:hover:bg-white/80"
-        >
-          {loading ? "Refreshing…" : "Refresh"}
-        </button>
-      </header>
+    <div className="flex min-h-screen flex-col">
+      <Header fetchedAt={data?.fetchedAt ?? null} loading={loading} onRefresh={load} />
 
-      {/* Per-platform warnings (non-fatal) */}
-      {data?.errors && data.errors.length > 0 && (
-        <div className="mb-4 space-y-2">
-          {data.errors.map((e, i) => (
-            <div
-              key={i}
-              className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-200"
+      <div className="mx-auto w-full max-w-6xl flex-1 px-4 py-6 sm:px-6 sm:py-8">
+        {/* Per-platform warnings (non-fatal) */}
+        {data?.errors && data.errors.length > 0 && (
+          <div className="mb-4 space-y-2">
+            {data.errors.map((e, i) => (
+              <div
+                key={i}
+                className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-200"
+              >
+                <span className="font-medium capitalize">{e.platform}</span>:{" "}
+                {e.message}
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Tabs */}
+        <nav className="mb-6 flex gap-1 overflow-x-auto rounded-xl border border-black/10 bg-white p-1 shadow-sm dark:border-white/10 dark:bg-neutral-900">
+          {TABS.map((t) => (
+            <button
+              key={t.id}
+              onClick={() => setTab(t.id)}
+              className={`flex-1 whitespace-nowrap rounded-lg px-4 py-2 text-sm font-medium transition ${
+                tab === t.id
+                  ? "bg-blue-700 text-white shadow-sm"
+                  : "text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white"
+              }`}
             >
-              <span className="font-medium capitalize">{e.platform}</span>:{" "}
-              {e.message}
-            </div>
+              {t.label}
+            </button>
           ))}
-        </div>
-      )}
+        </nav>
 
-      {/* Tabs */}
-      <nav className="mb-6 flex gap-1 overflow-x-auto rounded-xl border border-black/10 bg-gray-50 p-1 dark:border-white/10 dark:bg-neutral-800">
-        {TABS.map((t) => (
-          <button
-            key={t.id}
-            onClick={() => setTab(t.id)}
-            className={`flex-1 whitespace-nowrap rounded-lg px-4 py-2 text-sm font-medium transition ${
-              tab === t.id
-                ? "bg-white text-black shadow-sm dark:bg-neutral-700 dark:text-white"
-                : "text-gray-500 hover:text-black dark:text-gray-400 dark:hover:text-white"
-            }`}
-          >
-            {t.label}
-          </button>
-        ))}
-      </nav>
+        {/* Body */}
+        {error && !data ? (
+          <ErrorState message={error} onRetry={load} />
+        ) : loading && !data ? (
+          <LoadingState />
+        ) : data ? (
+          <>
+            {tab === "prospects" && <ProspectsView prospects={data.prospects} />}
+            {tab === "overview" && <OverviewView data={data} />}
+            {tab === "campaigns" && <CampaignsView campaigns={data.campaigns} />}
+          </>
+        ) : null}
+      </div>
 
-      {/* Body */}
-      {error && !data ? (
-        <ErrorState message={error} onRetry={load} />
-      ) : loading && !data ? (
-        <LoadingState />
-      ) : data ? (
-        <>
-          {tab === "prospects" && <ProspectsView prospects={data.prospects} />}
-          {tab === "overview" && <OverviewView data={data} />}
-          {tab === "campaigns" && <CampaignsView campaigns={data.campaigns} />}
-        </>
-      ) : null}
+      <footer className="border-t border-black/5 py-6 text-center text-xs text-slate-400 dark:border-white/5 dark:text-slate-600">
+        US Dealer Solutions · Outreach Dashboard
+      </footer>
     </div>
   );
 }

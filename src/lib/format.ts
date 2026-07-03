@@ -8,6 +8,21 @@ export function num(value: number): string {
   return value.toLocaleString("en-US");
 }
 
+/**
+ * Best-effort extraction of the dealership/client name from a campaign name.
+ * Assumes the common agency convention where the dealership comes first,
+ * separated from the campaign description by a delimiter, e.g.
+ *   "Toyota of Downtown - Cold Email Q3"  -> "Toyota of Downtown"
+ *   "ABC Motors | LinkedIn"               -> "ABC Motors"
+ * If no delimiter is found, the full name is returned.
+ */
+export function parseDealership(campaignName: string): string {
+  const name = (campaignName ?? "").trim();
+  if (!name) return "—";
+  const match = name.split(/\s*[-–—|:/]{1,2}\s*/)[0]?.trim();
+  return match || name;
+}
+
 export function timeAgo(iso: string | null): string {
   if (!iso) return "—";
   const then = new Date(iso).getTime();

@@ -9,7 +9,11 @@ export interface Campaign {
   id: string;
   platform: Platform;
   name: string;
+  /** Dealership/client this campaign is for, parsed from the campaign name. */
+  dealership: string;
   status: string;
+  /** Total leads targeted by this campaign. */
+  leads: number;
   /** Emails sent (Instantly) or messages sent (HeyReach). */
   sent: number;
   /** Unique opens (Instantly only; 0 for HeyReach). */

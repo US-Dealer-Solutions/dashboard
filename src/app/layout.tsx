@@ -13,7 +13,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Outreach Dashboard",
+  title: "US Dealer Solutions · Outreach Dashboard",
   description: "Live Instantly + HeyReach analytics and prospect tracking",
 };
 

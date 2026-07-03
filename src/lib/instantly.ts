@@ -3,6 +3,7 @@
 // Auth: Authorization: Bearer <API_KEY>  (create at app.instantly.ai → Settings → Integrations → API Keys)
 
 import { Campaign, Prospect } from "./types";
+import { parseDealership } from "./format";
 
 const BASE = "https://api.instantly.ai/api/v2";
 
@@ -43,6 +44,7 @@ interface RawAnalytics {
   campaign_id: string;
   campaign_name: string;
   campaign_status: number;
+  leads_count?: number;
   emails_sent_count?: number;
   contacted_count?: number;
   open_count_unique?: number;
@@ -95,11 +97,14 @@ export async function getCampaigns(): Promise<Campaign[]> {
     const sent = r.emails_sent_count ?? 0;
     const opens = r.open_count_unique ?? r.open_count ?? 0;
     const replies = r.reply_count_unique ?? r.reply_count ?? 0;
+    const name = r.campaign_name ?? "(untitled)";
     return {
       id: r.campaign_id,
       platform: "instantly" as const,
-      name: r.campaign_name ?? "(untitled)",
+      name,
+      dealership: parseDealership(name),
       status: STATUS_LABEL[r.campaign_status] ?? String(r.campaign_status ?? ""),
+      leads: r.leads_count ?? 0,
       sent,
       opens,
       replies,

@@ -4,6 +4,7 @@
 // Note: most list/stat endpoints are POST with a JSON body { offset, limit, ... }.
 
 import { Campaign, Prospect } from "./types";
+import { parseDealership } from "./format";
 
 const BASE = "https://api.heyreach.io/api/public";
 
@@ -41,6 +42,11 @@ interface RawCampaign {
   id: number;
   name: string;
   status: string;
+  // Lead totals appear under different keys depending on the account; we try
+  // several and fall back to uniqueLeadsContacted from the stats endpoint.
+  totalLeads?: number;
+  leadsCount?: number;
+  progressStats?: { totalUsers?: number; totalLeads?: number };
 }
 
 interface CampaignListResponse {
@@ -54,6 +60,7 @@ interface OverallStats {
     totalMessageReplies?: number;
     connectionsSent?: number;
     connectionsAccepted?: number;
+    uniqueLeadsContacted?: number;
     messageReplyRate?: number;
     connectionAcceptanceRate?: number;
   };
@@ -121,11 +128,21 @@ export async function getCampaigns(): Promise<Campaign[]> {
     const s = stats[i].overallStats ?? {};
     const sent = s.messagesSent ?? 0;
     const replies = s.totalMessageReplies ?? 0;
+    const name = c.name ?? "(untitled)";
+    const leads =
+      c.totalLeads ??
+      c.leadsCount ??
+      c.progressStats?.totalLeads ??
+      c.progressStats?.totalUsers ??
+      s.uniqueLeadsContacted ??
+      0;
     return {
       id: String(c.id),
       platform: "heyreach" as const,
-      name: c.name ?? "(untitled)",
+      name,
+      dealership: parseDealership(name),
       status: c.status ?? "",
+      leads,
       sent,
       opens: 0, // not applicable to LinkedIn outreach
       replies,
