@@ -1,8 +1,9 @@
-# Netlify configuration. The official Next.js runtime is auto-installed by
-# Netlify and handles server-side routes (so your API keys stay on the server).
+# Netlify configuration for Next.js.
+# The official Next.js runtime (@netlify/plugin-nextjs) is auto-installed by
+# Netlify and manages the output directory + server-side routes, so we do NOT
+# set `publish` manually (setting it to ".next" conflicts with the runtime).
 [build]
   command = "npm run build"
-  publish = ".next"
 
 [[plugins]]
   package = "@netlify/plugin-nextjs"
