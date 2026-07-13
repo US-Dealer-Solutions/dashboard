@@ -3,7 +3,13 @@
 // Auth: X-API-KEY: <API_KEY>  (Settings → Integrations → Public API)
 // Note: most list/stat endpoints are POST with a JSON body { offset, limit, ... }.
 
-import { Campaign, CampaignMessaging, Prospect } from "./types";
+import {
+  Campaign,
+  CampaignMessaging,
+  Conversation,
+  ConversationMessage,
+  Prospect,
+} from "./types";
 import { trackFromName } from "./format";
 
 const BASE = "https://api.heyreach.io/api/public";
@@ -78,26 +84,71 @@ interface OverallStats {
   };
 }
 
-interface ConversationMessage {
-  isIncoming?: boolean;
-  sentAt?: string;
+// Actual shape returned by /inbox/GetConversationsV2.
+interface RawInboxMessage {
   createdAt?: string;
+  body?: string;
+  subject?: string;
+  sender?: string; // "CORRESPONDENT" = them; anything else = the connected account
+  isInMail?: boolean;
 }
 
-interface Conversation {
-  leadId?: number | string;
-  leadName?: string;
-  profileUrl?: string;
+interface RawCorrespondent {
+  firstName?: string;
+  lastName?: string;
+  headline?: string;
   companyName?: string;
   position?: string;
-  campaignId?: number;
-  messages?: ConversationMessage[];
+  location?: string;
+  profileUrl?: string;
+  imageUrl?: string;
 }
 
-interface ConversationsResponse {
+interface RawConvo {
+  id?: string;
+  read?: boolean;
+  lastMessageAt?: string;
+  lastMessageText?: string;
+  lastMessageSender?: string;
+  totalMessages?: number;
+  campaignId?: number;
+  correspondentProfile?: RawCorrespondent;
+  messages?: RawInboxMessage[];
+}
+
+interface InboxResponse {
   totalCount: number;
-  items?: Conversation[];
-  conversations?: Conversation[];
+  items?: RawConvo[];
+}
+
+function normalizeConvo(c: RawConvo): Conversation {
+  const p = c.correspondentProfile ?? {};
+  const name =
+    [p.firstName, p.lastName].filter(Boolean).join(" ").trim() || "(unknown)";
+  const messages: ConversationMessage[] = (c.messages ?? [])
+    .map((m) => ({
+      from: (m.sender === "CORRESPONDENT" ? "them" : "us") as "them" | "us",
+      text: m.body ?? "",
+      at: m.createdAt ?? null,
+    }))
+    .sort((a, b) => (a.at ?? "").localeCompare(b.at ?? ""));
+  return {
+    id: String(c.id ?? p.profileUrl ?? name),
+    platform: "heyreach",
+    name,
+    headline: p.headline?.trim() || null,
+    company: p.companyName?.trim() || null,
+    title: p.position?.trim() || null,
+    profileUrl: p.profileUrl ?? null,
+    imageUrl: p.imageUrl ?? null,
+    location: p.location?.trim() || null,
+    lastMessageAt: c.lastMessageAt ?? null,
+    lastMessageText: c.lastMessageText ?? "",
+    lastFrom: c.lastMessageSender === "CORRESPONDENT" ? "them" : "us",
+    totalMessages: c.totalMessages ?? messages.length,
+    unread: c.read === false,
+    messages,
+  };
 }
 
 function rate(numerator: number, denominator: number): number {
@@ -215,50 +266,66 @@ export async function getMessaging(): Promise<CampaignMessaging[]> {
   return [];
 }
 
+/** Fetch and normalize every inbox conversation, following pagination. */
+async function fetchAllConvos(): Promise<RawConvo[]> {
+  const out: RawConvo[] = [];
+  for (let offset = 0; offset < 5000; offset += 50) {
+    const resp = await post<InboxResponse>("/inbox/GetConversationsV2", {
+      offset,
+      limit: 50,
+      filters: {},
+    });
+    const items = resp.items ?? [];
+    out.push(...items);
+    if (items.length === 0 || out.length >= (resp.totalCount ?? out.length))
+      break;
+  }
+  return out;
+}
+
+/** All live inbox conversations, newest first. */
+export async function getConversations(): Promise<Conversation[]> {
+  const raw = await fetchAllConvos();
+  return raw
+    .map(normalizeConvo)
+    .sort((a, b) => (b.lastMessageAt ?? "").localeCompare(a.lastMessageAt ?? ""));
+}
+
 /**
- * Prospects who replied. HeyReach has no reliable "opened" signal, so the
- * dependable engagement signal is an incoming message in the inbox.
+ * Prospects who replied to our outreach. We only count conversations tied to a
+ * campaign (campaignId set) so unrelated inbound LinkedIn messages don't show
+ * up as dealership prospects.
  */
 export async function getEngagedProspects(
   campaignNames: Map<string, string>,
 ): Promise<Prospect[]> {
+  const raw = await fetchAllConvos();
   const byId = new Map<string, Prospect>();
 
-  for (let offset = 0; offset < 5000; offset += 50) {
-    const resp = await post<ConversationsResponse>(
-      "/inbox/GetConversationsV2",
-      { offset, limit: 50, filters: {} },
-    );
-    const convos = resp.items ?? resp.conversations ?? [];
-    if (convos.length === 0) break;
+  for (const c of raw) {
+    if (c.campaignId == null) continue; // skip non-campaign inbox threads
+    const msgs = c.messages ?? [];
+    const replied =
+      c.lastMessageSender === "CORRESPONDENT" ||
+      msgs.some((m) => m.sender === "CORRESPONDENT");
+    if (!replied) continue;
 
-    for (const c of convos) {
-      const msgs = c.messages ?? [];
-      const replied = msgs.some((m) => m.isIncoming === true);
-      if (!replied) continue; // only surface prospects who actually replied
-
-      const incoming = msgs.filter((m) => m.isIncoming === true);
-      const last = incoming[incoming.length - 1];
-      const id = String(c.leadId ?? c.profileUrl ?? c.leadName ?? Math.random());
-      const cid = c.campaignId != null ? String(c.campaignId) : null;
-
-      byId.set(id, {
-        id,
-        platform: "heyreach",
-        name: c.leadName ?? "(unknown)",
-        email: null,
-        company: c.companyName ?? null,
-        title: c.position ?? null,
-        campaignId: cid,
-        campaignName: cid ? campaignNames.get(cid) ?? null : null,
-        opened: false,
-        replied: true,
-        profileUrl: c.profileUrl ?? null,
-        lastActivity: last?.sentAt ?? last?.createdAt ?? null,
-      });
-    }
-
-    if (convos.length >= (resp.totalCount ?? convos.length)) break;
+    const conv = normalizeConvo(c);
+    const cid = String(c.campaignId);
+    byId.set(conv.id, {
+      id: conv.id,
+      platform: "heyreach",
+      name: conv.name,
+      email: null,
+      company: conv.company,
+      title: conv.title,
+      campaignId: cid,
+      campaignName: campaignNames.get(cid) ?? null,
+      opened: false,
+      replied: true,
+      profileUrl: conv.profileUrl,
+      lastActivity: conv.lastMessageAt,
+    });
   }
 
   return [...byId.values()];

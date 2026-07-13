@@ -2,7 +2,13 @@
 // Docs: https://developer.instantly.ai  | OpenAPI: https://api.instantly.ai/openapi/api_v2.json
 // Auth: Authorization: Bearer <API_KEY>  (create at app.instantly.ai → Settings → Integrations → API Keys)
 
-import { Campaign, CampaignMessaging, MessagingStep, Prospect } from "./types";
+import {
+  Campaign,
+  CampaignMessaging,
+  Conversation,
+  MessagingStep,
+  Prospect,
+} from "./types";
 import { trackFromName } from "./format";
 import { sanitizeHtml } from "./sanitize";
 
@@ -213,6 +219,15 @@ export async function getMessaging(): Promise<CampaignMessaging[]> {
       steps,
     };
   });
+}
+
+/**
+ * Live email conversations. Instantly exposes these via the (rate-limited)
+ * /emails endpoint; not wired up yet, so the Inbox shows LinkedIn threads for
+ * now. Returns [] to keep the client interface uniform.
+ */
+export async function getConversations(): Promise<Conversation[]> {
+  return [];
 }
 
 /** List leads matching a server-side filter, following pagination. */

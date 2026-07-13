@@ -76,6 +76,34 @@ export interface CampaignMessaging {
   steps: MessagingStep[];
 }
 
+/** A single message within a live conversation. */
+export interface ConversationMessage {
+  /** "them" = the prospect/correspondent, "us" = the connected account. */
+  from: "them" | "us";
+  text: string;
+  at: string | null;
+}
+
+/** A live inbox conversation (e.g. a HeyReach LinkedIn thread). */
+export interface Conversation {
+  id: string;
+  platform: Platform;
+  name: string;
+  headline: string | null;
+  company: string | null;
+  title: string | null;
+  profileUrl: string | null;
+  imageUrl: string | null;
+  location: string | null;
+  lastMessageAt: string | null;
+  lastMessageText: string;
+  lastFrom: "them" | "us";
+  totalMessages: number;
+  unread: boolean;
+  /** Full thread when available (the list endpoint may return a subset). */
+  messages: ConversationMessage[];
+}
+
 /** Aggregated KPI totals for the overview view. */
 export interface Totals {
   sent: number;
@@ -98,6 +126,7 @@ export interface DashboardData {
   campaigns: Campaign[];
   prospects: Prospect[];
   messaging: CampaignMessaging[];
+  conversations: Conversation[];
   /** Non-fatal errors per platform (e.g. one API key missing/invalid). */
   errors: { platform: Platform; message: string }[];
   fetchedAt: string;

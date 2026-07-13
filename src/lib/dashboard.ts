@@ -7,6 +7,7 @@ import * as heyreach from "./heyreach";
 import {
   Campaign,
   CampaignMessaging,
+  Conversation,
   DashboardData,
   Platform,
   Prospect,
@@ -37,22 +38,24 @@ async function loadPlatform(
   campaigns: Campaign[];
   prospects: Prospect[];
   messaging: CampaignMessaging[];
+  conversations: Conversation[];
 }> {
   const client = platform === "instantly" ? instantly : heyreach;
   try {
-    const [campaigns, messaging] = await Promise.all([
+    const [campaigns, messaging, conversations] = await Promise.all([
       client.getCampaigns(),
       client.getMessaging(),
+      client.getConversations(),
     ]);
     const names = new Map(campaigns.map((c) => [c.id, c.name]));
     const prospects = await client.getEngagedProspects(names);
-    return { campaigns, prospects, messaging };
+    return { campaigns, prospects, messaging, conversations };
   } catch (err) {
     errors.push({
       platform,
       message: err instanceof Error ? err.message : String(err),
     });
-    return { campaigns: [], prospects: [], messaging: [] };
+    return { campaigns: [], prospects: [], messaging: [], conversations: [] };
   }
 }
 
@@ -66,6 +69,10 @@ export async function getDashboardData(): Promise<DashboardData> {
 
   const campaigns = [...inst.campaigns, ...hey.campaigns];
   const messaging: CampaignMessaging[] = [...inst.messaging, ...hey.messaging];
+  const conversations: Conversation[] = [
+    ...inst.conversations,
+    ...hey.conversations,
+  ].sort((a, b) => (b.lastMessageAt ?? "").localeCompare(a.lastMessageAt ?? ""));
   const prospects = [...inst.prospects, ...hey.prospects].sort((a, b) => {
     // Replied first, then most recent activity.
     if (a.replied !== b.replied) return a.replied ? -1 : 1;
@@ -81,6 +88,7 @@ export async function getDashboardData(): Promise<DashboardData> {
     campaigns,
     prospects,
     messaging,
+    conversations,
     errors,
     fetchedAt: new Date().toISOString(),
   };
