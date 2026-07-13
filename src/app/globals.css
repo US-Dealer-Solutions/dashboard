@@ -24,3 +24,18 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+/* Rendered email/message bodies in the Messaging tab. */
+.prose-email a {
+  color: #1d4ed8;
+  text-decoration: underline;
+  word-break: break-word;
+}
+.prose-email div {
+  min-height: 0.5rem;
+}
+.prose-email br + br {
+  display: block;
+  content: "";
+  margin-top: 0.5rem;
+}

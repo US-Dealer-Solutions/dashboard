@@ -2,8 +2,9 @@
 // Docs: https://developer.instantly.ai  | OpenAPI: https://api.instantly.ai/openapi/api_v2.json
 // Auth: Authorization: Bearer <API_KEY>  (create at app.instantly.ai → Settings → Integrations → API Keys)
 
-import { Campaign, Prospect } from "./types";
+import { Campaign, CampaignMessaging, MessagingStep, Prospect } from "./types";
 import { trackFromName } from "./format";
+import { sanitizeHtml } from "./sanitize";
 
 const BASE = "https://api.instantly.ai/api/v2";
 
@@ -74,10 +75,17 @@ interface LeadsListResponse {
   next_starting_after?: string | null;
 }
 
+interface RawSeqStep {
+  type?: string;
+  delay?: number;
+  variants?: { subject?: string; body?: string }[];
+}
+
 interface RawCampaignListItem {
   id: string;
   name: string;
   status: number;
+  sequences?: { steps?: RawSeqStep[] }[];
 }
 
 interface CampaignListResponse {
@@ -173,6 +181,38 @@ export async function getCampaigns(): Promise<Campaign[]> {
       };
     }),
   );
+}
+
+/** Extract the message sequence (subject + body per step) for every campaign. */
+export async function getMessaging(): Promise<CampaignMessaging[]> {
+  const list = await listAllCampaigns();
+  return list.map((c): CampaignMessaging => {
+    const rawSteps = c.sequences?.[0]?.steps ?? [];
+    let day = 0;
+    const steps: MessagingStep[] = rawSteps.map((s, i) => {
+      const v = s.variants?.[0] ?? {};
+      const step: MessagingStep = {
+        order: i + 1,
+        day,
+        type: s.type ?? "email",
+        subject: v.subject?.trim() ? v.subject : null,
+        body: sanitizeHtml(v.body ?? ""),
+        variantCount: s.variants?.length ?? 1,
+      };
+      // Instantly's per-step `delay` is the wait before the next step.
+      day += s.delay ?? 0;
+      return step;
+    });
+    const name = c.name ?? "(untitled)";
+    return {
+      campaignId: c.id,
+      platform: "instantly",
+      name,
+      track: trackFromName(name),
+      status: STATUS_LABEL[c.status] ?? String(c.status ?? ""),
+      steps,
+    };
+  });
 }
 
 /** List leads matching a server-side filter, following pagination. */

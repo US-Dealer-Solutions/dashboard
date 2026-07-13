@@ -6,13 +6,15 @@ import Header from "./Header";
 import OverviewView from "./OverviewView";
 import ProspectsView from "./ProspectsView";
 import CampaignsView from "./CampaignsView";
+import MessagingView from "./MessagingView";
 
-type Tab = "prospects" | "overview" | "campaigns";
+type Tab = "prospects" | "overview" | "campaigns" | "messaging";
 
 const TABS: { id: Tab; label: string }[] = [
   { id: "prospects", label: "Prospects" },
   { id: "overview", label: "Analytics" },
   { id: "campaigns", label: "Campaigns" },
+  { id: "messaging", label: "Messaging" },
 ];
 
 export default function DashboardClient() {
@@ -87,6 +89,7 @@ export default function DashboardClient() {
             {tab === "prospects" && <ProspectsView prospects={data.prospects} />}
             {tab === "overview" && <OverviewView data={data} />}
             {tab === "campaigns" && <CampaignsView campaigns={data.campaigns} />}
+            {tab === "messaging" && <MessagingView messaging={data.messaging} />}
           </>
         ) : null}
       </div>

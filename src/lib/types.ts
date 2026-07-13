@@ -51,6 +51,31 @@ export interface Prospect {
   lastActivity: string | null;
 }
 
+/** One step (message) in a campaign's outreach sequence. */
+export interface MessagingStep {
+  /** 1-based position in the sequence. */
+  order: number;
+  /** Cumulative day the message is sent, relative to enrollment (Day 0 = first). */
+  day: number;
+  /** email, connection_request, linkedin_message, etc. */
+  type: string;
+  subject: string | null;
+  /** Sanitized HTML (email) or plain text (LinkedIn) of the message body. */
+  body: string;
+  /** Number of A/B variants for this step (1 = single variant). */
+  variantCount: number;
+}
+
+/** The full message sequence for one campaign. */
+export interface CampaignMessaging {
+  campaignId: string;
+  platform: Platform;
+  name: string;
+  track: string;
+  status: string;
+  steps: MessagingStep[];
+}
+
 /** Aggregated KPI totals for the overview view. */
 export interface Totals {
   sent: number;
@@ -72,6 +97,7 @@ export interface DashboardData {
   };
   campaigns: Campaign[];
   prospects: Prospect[];
+  messaging: CampaignMessaging[];
   /** Non-fatal errors per platform (e.g. one API key missing/invalid). */
   errors: { platform: Platform; message: string }[];
   fetchedAt: string;

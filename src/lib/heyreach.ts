@@ -3,7 +3,7 @@
 // Auth: X-API-KEY: <API_KEY>  (Settings → Integrations → Public API)
 // Note: most list/stat endpoints are POST with a JSON body { offset, limit, ... }.
 
-import { Campaign, Prospect } from "./types";
+import { Campaign, CampaignMessaging, Prospect } from "./types";
 import { trackFromName } from "./format";
 
 const BASE = "https://api.heyreach.io/api/public";
@@ -204,6 +204,15 @@ export async function getCampaigns(): Promise<Campaign[]> {
     }));
 
   return [...campaigns, ...staged];
+}
+
+/**
+ * HeyReach message sequences. The public API does not expose the written
+ * connection-note / message copy for staged lists — it only becomes available
+ * once a campaign is launched on top of a list. Until then this returns [].
+ */
+export async function getMessaging(): Promise<CampaignMessaging[]> {
+  return [];
 }
 
 /**

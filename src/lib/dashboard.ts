@@ -6,6 +6,7 @@ import * as instantly from "./instantly";
 import * as heyreach from "./heyreach";
 import {
   Campaign,
+  CampaignMessaging,
   DashboardData,
   Platform,
   Prospect,
@@ -32,19 +33,26 @@ function totalsFor(campaigns: Campaign[], prospects: Prospect[]): Totals {
 async function loadPlatform(
   platform: Platform,
   errors: DashboardData["errors"],
-): Promise<{ campaigns: Campaign[]; prospects: Prospect[] }> {
+): Promise<{
+  campaigns: Campaign[];
+  prospects: Prospect[];
+  messaging: CampaignMessaging[];
+}> {
   const client = platform === "instantly" ? instantly : heyreach;
   try {
-    const campaigns = await client.getCampaigns();
+    const [campaigns, messaging] = await Promise.all([
+      client.getCampaigns(),
+      client.getMessaging(),
+    ]);
     const names = new Map(campaigns.map((c) => [c.id, c.name]));
     const prospects = await client.getEngagedProspects(names);
-    return { campaigns, prospects };
+    return { campaigns, prospects, messaging };
   } catch (err) {
     errors.push({
       platform,
       message: err instanceof Error ? err.message : String(err),
     });
-    return { campaigns: [], prospects: [] };
+    return { campaigns: [], prospects: [], messaging: [] };
   }
 }
 
@@ -57,6 +65,7 @@ export async function getDashboardData(): Promise<DashboardData> {
   ]);
 
   const campaigns = [...inst.campaigns, ...hey.campaigns];
+  const messaging: CampaignMessaging[] = [...inst.messaging, ...hey.messaging];
   const prospects = [...inst.prospects, ...hey.prospects].sort((a, b) => {
     // Replied first, then most recent activity.
     if (a.replied !== b.replied) return a.replied ? -1 : 1;
@@ -71,6 +80,7 @@ export async function getDashboardData(): Promise<DashboardData> {
     },
     campaigns,
     prospects,
+    messaging,
     errors,
     fetchedAt: new Date().toISOString(),
   };
