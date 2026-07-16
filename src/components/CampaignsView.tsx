@@ -3,7 +3,7 @@
 import { useMemo } from "react";
 import { Campaign } from "@/lib/types";
 import { num, pct } from "@/lib/format";
-import { PlatformBadge, StatusPill } from "./ui";
+import { PlatformBadge, StatusPill, statusTone } from "./ui";
 
 export default function CampaignsView({ campaigns }: { campaigns: Campaign[] }) {
   // Group campaigns by audience/track so email + LinkedIn for the same
@@ -71,7 +71,7 @@ export default function CampaignsView({ campaigns }: { campaigns: Campaign[] }) 
                         <PlatformBadge platform={c.platform} />
                       </td>
                       <td className="px-4 py-3">
-                        <StatusPill tone={c.staged ? "amber" : "gray"}>
+                        <StatusPill tone={statusTone(c.status, c.staged)}>
                           {c.status}
                         </StatusPill>
                       </td>
@@ -110,7 +110,7 @@ export default function CampaignsView({ campaigns }: { campaigns: Campaign[] }) 
                     <PlatformBadge platform={c.platform} />
                   </div>
                   <div className="mt-1">
-                    <StatusPill tone={c.staged ? "amber" : "gray"}>
+                    <StatusPill tone={statusTone(c.status, c.staged)}>
                       {c.status}
                     </StatusPill>
                   </div>

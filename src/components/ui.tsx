@@ -16,11 +16,26 @@ export function PlatformBadge({ platform }: { platform: Platform }) {
   );
 }
 
+export type Tone = "green" | "amber" | "gray";
+
+/**
+ * Colour for a campaign status pill. Live/sending campaigns read green,
+ * not-yet-live states (draft, staged, paused) read amber, and finished or
+ * unknown states stay neutral.
+ */
+export function statusTone(status: string, staged = false): Tone {
+  if (staged) return "amber";
+  const s = (status ?? "").toLowerCase();
+  if (/active|in_progress|in progress|running|sending/.test(s)) return "green";
+  if (/draft|paused|staged|scheduled/.test(s)) return "amber";
+  return "gray";
+}
+
 export function StatusPill({
   tone,
   children,
 }: {
-  tone: "green" | "amber" | "gray";
+  tone: Tone;
   children: React.ReactNode;
 }) {
   const map = {

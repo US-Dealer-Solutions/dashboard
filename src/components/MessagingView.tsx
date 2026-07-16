@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { CampaignMessaging, MessagingStep } from "@/lib/types";
-import { PlatformBadge, StatusPill } from "./ui";
+import { PlatformBadge, StatusPill, statusTone } from "./ui";
 
 export default function MessagingView({
   messaging,
@@ -67,7 +67,7 @@ function SequenceCard({ seq }: { seq: CampaignMessaging }) {
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <StatusPill tone="gray">{seq.status}</StatusPill>
+          <StatusPill tone={statusTone(seq.status)}>{seq.status}</StatusPill>
           <PlatformBadge platform={seq.platform} />
         </div>
       </div>
