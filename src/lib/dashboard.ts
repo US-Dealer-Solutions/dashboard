@@ -28,7 +28,43 @@ function totalsFor(campaigns: Campaign[], prospects: Prospect[]): Totals {
   t.replyRate = t.sent > 0 ? t.replies / t.sent : 0;
   t.prospectsOpened = prospects.filter((p) => p.opened).length;
   t.prospectsReplied = prospects.filter((p) => p.replied).length;
+  t.prospectsConnected = prospects.filter((p) => p.connected).length;
   return t;
+}
+
+/**
+ * Merge duplicate prospects (same person surfacing from more than one source
+ * or channel) into one row, keyed by email or normalized name+company.
+ */
+function dedupeProspects(prospects: Prospect[]): Prospect[] {
+  const byKey = new Map<string, Prospect>();
+  for (const p of prospects) {
+    const key = (
+      p.email?.toLowerCase().trim() ||
+      `${p.name}|${p.company ?? ""}`.toLowerCase().trim()
+    ).replace(/\s+/g, " ");
+    const existing = byKey.get(key);
+    if (!existing) {
+      byKey.set(key, { ...p, channels: [...p.channels] });
+      continue;
+    }
+    // Merge engagement flags and channels into the existing record.
+    existing.opened = existing.opened || p.opened;
+    existing.replied = existing.replied || p.replied;
+    existing.connected = existing.connected || p.connected;
+    existing.connectionStatus = existing.connectionStatus ?? p.connectionStatus;
+    existing.email = existing.email ?? p.email;
+    existing.company = existing.company ?? p.company;
+    existing.title = existing.title ?? p.title;
+    existing.profileUrl = existing.profileUrl ?? p.profileUrl;
+    existing.campaignName = existing.campaignName ?? p.campaignName;
+    existing.nextMessage = existing.nextMessage ?? p.nextMessage;
+    for (const ch of p.channels)
+      if (!existing.channels.includes(ch)) existing.channels.push(ch);
+    if ((p.lastActivity ?? "") > (existing.lastActivity ?? ""))
+      existing.lastActivity = p.lastActivity;
+  }
+  return [...byKey.values()];
 }
 
 async function loadPlatform(
@@ -73,9 +109,14 @@ export async function getDashboardData(): Promise<DashboardData> {
     ...inst.conversations,
     ...hey.conversations,
   ].sort((a, b) => (b.lastMessageAt ?? "").localeCompare(a.lastMessageAt ?? ""));
-  const prospects = [...inst.prospects, ...hey.prospects].sort((a, b) => {
-    // Replied first, then most recent activity.
-    if (a.replied !== b.replied) return a.replied ? -1 : 1;
+  const prospects = dedupeProspects([
+    ...inst.prospects,
+    ...hey.prospects,
+  ]).sort((a, b) => {
+    // Replied first, then connected, then opened, then most recent activity.
+    const rank = (p: Prospect) =>
+      p.replied ? 0 : p.connected ? 1 : p.opened ? 2 : 3;
+    if (rank(a) !== rank(b)) return rank(a) - rank(b);
     return (b.lastActivity ?? "").localeCompare(a.lastActivity ?? "");
   });
 

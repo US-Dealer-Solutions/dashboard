@@ -7,10 +7,11 @@ import {
   CampaignMessaging,
   Conversation,
   MessagingStep,
+  NextMessage,
   Prospect,
 } from "./types";
 import { trackFromName } from "./format";
-import { sanitizeHtml } from "./sanitize";
+import { sanitizeHtml, htmlToText } from "./sanitize";
 
 const BASE = "https://api.instantly.ai/api/v2";
 
@@ -72,7 +73,7 @@ interface RawLead {
   email_open_count?: number;
   email_reply_count?: number;
   status_summary?: {
-    lastStep?: { timestamp_executed?: string };
+    lastStep?: { stepID?: string; timestamp_executed?: string };
   };
 }
 
@@ -193,22 +194,6 @@ export async function getCampaigns(): Promise<Campaign[]> {
 export async function getMessaging(): Promise<CampaignMessaging[]> {
   const list = await listAllCampaigns();
   return list.map((c): CampaignMessaging => {
-    const rawSteps = c.sequences?.[0]?.steps ?? [];
-    let day = 0;
-    const steps: MessagingStep[] = rawSteps.map((s, i) => {
-      const v = s.variants?.[0] ?? {};
-      const step: MessagingStep = {
-        order: i + 1,
-        day,
-        type: s.type ?? "email",
-        subject: v.subject?.trim() ? v.subject : null,
-        body: sanitizeHtml(v.body ?? ""),
-        variantCount: s.variants?.length ?? 1,
-      };
-      // Instantly's per-step `delay` is the wait before the next step.
-      day += s.delay ?? 0;
-      return step;
-    });
     const name = c.name ?? "(untitled)";
     return {
       campaignId: c.id,
@@ -216,9 +201,64 @@ export async function getMessaging(): Promise<CampaignMessaging[]> {
       name,
       track: trackFromName(name),
       status: STATUS_LABEL[c.status] ?? String(c.status ?? ""),
-      steps,
+      steps: buildSteps(c),
     };
   });
+}
+
+/** Build normalized sequence steps (with cumulative day) for a campaign. */
+function buildSteps(c: RawCampaignListItem): MessagingStep[] {
+  const rawSteps = c.sequences?.[0]?.steps ?? [];
+  let day = 0;
+  return rawSteps.map((s, i) => {
+    const v = s.variants?.[0] ?? {};
+    const step: MessagingStep = {
+      order: i + 1,
+      day,
+      type: s.type ?? "email",
+      subject: v.subject?.trim() ? v.subject : null,
+      body: sanitizeHtml(v.body ?? ""),
+      variantCount: s.variants?.length ?? 1,
+    };
+    // Instantly's per-step `delay` is the wait before the next step.
+    day += s.delay ?? 0;
+    return step;
+  });
+}
+
+/** Map of campaignId -> its sequence steps, for next-message lookups. */
+async function campaignSequences(): Promise<Map<string, MessagingStep[]>> {
+  const list = await listAllCampaigns();
+  return new Map(list.map((c) => [c.id, buildSteps(c)]));
+}
+
+/**
+ * Work out the next email queued for a lead from the last step it received.
+ * Returns null if the lead replied (sequence pauses) or finished the sequence.
+ */
+function nextEmailFor(
+  lead: RawLead,
+  steps: MessagingStep[],
+): NextMessage | null {
+  if ((lead.email_reply_count ?? 0) > 0) return null; // replied -> your turn
+  if (!steps.length) return null;
+  // stepID looks like "0_2_0" (sequence_step_variant); middle = last step index.
+  const stepId = lead.status_summary?.lastStep?.stepID;
+  let nextIdx = 0;
+  if (stepId) {
+    const parts = stepId.split("_");
+    const last = parseInt(parts[1] ?? "", 10);
+    if (!Number.isNaN(last)) nextIdx = last + 1;
+  }
+  if (nextIdx >= steps.length) return null; // sequence complete
+  const s = steps[nextIdx];
+  return {
+    platform: "instantly",
+    label: `Day ${s.day} email`,
+    subject: s.subject,
+    preview: htmlToText(s.body).slice(0, 240),
+    available: true,
+  };
 }
 
 /**
@@ -252,14 +292,17 @@ async function listLeads(filter: string, cap = 500): Promise<RawLead[]> {
 function leadToProspect(
   lead: RawLead,
   campaignNames: Map<string, string>,
+  sequences: Map<string, MessagingStep[]>,
 ): Prospect {
   const name =
     [lead.first_name, lead.last_name].filter(Boolean).join(" ").trim() ||
     lead.email ||
     "(unknown)";
+  const steps = lead.campaign ? sequences.get(lead.campaign) ?? [] : [];
   return {
     id: lead.id,
     platform: "instantly",
+    channels: ["instantly"],
     name,
     email: lead.email ?? null,
     company: lead.company_name ?? null,
@@ -268,6 +311,9 @@ function leadToProspect(
     campaignName: lead.campaign ? campaignNames.get(lead.campaign) ?? null : null,
     opened: (lead.email_open_count ?? 0) > 0,
     replied: (lead.email_reply_count ?? 0) > 0,
+    connected: false,
+    connectionStatus: null,
+    nextMessage: nextEmailFor(lead, steps),
     profileUrl: null,
     lastActivity: lead.status_summary?.lastStep?.timestamp_executed ?? null,
   };
@@ -280,13 +326,15 @@ function leadToProspect(
 export async function getEngagedProspects(
   campaignNames: Map<string, string>,
 ): Promise<Prospect[]> {
-  const [replied, openedNoReply] = await Promise.all([
+  const [replied, openedNoReply, sequences] = await Promise.all([
     listLeads("FILTER_VAL_REPLIED"),
     listLeads("FILTER_VAL_OPENED_NO_REPLY"),
+    campaignSequences(),
   ]);
   const byId = new Map<string, Prospect>();
   for (const lead of [...replied, ...openedNoReply]) {
-    if (!byId.has(lead.id)) byId.set(lead.id, leadToProspect(lead, campaignNames));
+    if (!byId.has(lead.id))
+      byId.set(lead.id, leadToProspect(lead, campaignNames, sequences));
   }
   return [...byId.values()];
 }

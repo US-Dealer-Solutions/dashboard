@@ -31,10 +31,25 @@ export interface Campaign {
   bounced: number;
 }
 
-/** A prospect who has engaged (opened and/or replied), normalized. */
+/** The next message queued to send to a prospect. */
+export interface NextMessage {
+  platform: Platform;
+  /** Short label, e.g. "Day 6 email" or "LinkedIn follow-up". */
+  label: string;
+  /** Email subject line, if applicable. */
+  subject: string | null;
+  /** Plain-text preview of the body. Null when the copy isn't API-exposed. */
+  preview: string | null;
+  /** False when the platform doesn't expose the message copy (HeyReach). */
+  available: boolean;
+}
+
+/** A prospect who has engaged (opened, replied, or connected), normalized. */
 export interface Prospect {
   id: string;
   platform: Platform;
+  /** Channels this prospect is engaged on (email, LinkedIn, or both if merged). */
+  channels: Platform[];
   name: string;
   email: string | null;
   company: string | null;
@@ -45,6 +60,12 @@ export interface Prospect {
   opened: boolean;
   /** True if the prospect replied. */
   replied: boolean;
+  /** True if the prospect accepted a LinkedIn connection request (HeyReach). */
+  connected: boolean;
+  /** Human-readable connection status, e.g. "Connection accepted". */
+  connectionStatus: string | null;
+  /** The next message queued for this prospect, if known. */
+  nextMessage: NextMessage | null;
   /** Optional profile/LinkedIn URL (HeyReach). */
   profileUrl: string | null;
   /** ISO timestamp of the most recent engagement, if known. */
@@ -115,6 +136,7 @@ export interface Totals {
   replyRate: number;
   prospectsOpened: number;
   prospectsReplied: number;
+  prospectsConnected: number;
 }
 
 export interface DashboardData {
@@ -143,5 +165,6 @@ export function emptyTotals(): Totals {
     replyRate: 0,
     prospectsOpened: 0,
     prospectsReplied: 0,
+    prospectsConnected: 0,
   };
 }

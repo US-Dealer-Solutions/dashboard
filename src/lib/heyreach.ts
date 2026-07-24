@@ -8,6 +8,7 @@ import {
   CampaignMessaging,
   Conversation,
   ConversationMessage,
+  NextMessage,
   Prospect,
 } from "./types";
 import { trackFromName } from "./format";
@@ -119,6 +120,38 @@ interface RawConvo {
 interface InboxResponse {
   totalCount: number;
   items?: RawConvo[];
+}
+
+// Shape from /campaign/GetLeadsFromCampaign — per-lead connection/message status.
+interface RawCampaignLead {
+  id: number;
+  linkedInUserProfile?: RawCorrespondent;
+  lastActionTime?: string | null;
+  leadCampaignStatus?: string; // InSequence | Finished | Failed …
+  leadConnectionStatus?: string; // None | ConnectionSent | ConnectionAccepted
+  leadMessageStatus?: string; // None | MessageSent | MessageReplied …
+  linkedInSenderFullName?: string;
+}
+
+interface CampaignLeadsResponse {
+  totalCount: number;
+  items?: RawCampaignLead[];
+}
+
+function nextLinkedInMessage(lead: RawCampaignLead): NextMessage | null {
+  const msg = lead.leadMessageStatus ?? "";
+  if (/repl/i.test(msg)) return null; // they replied — your turn
+  const label = /sent/i.test(msg)
+    ? "LinkedIn follow-up message"
+    : "First LinkedIn message";
+  // HeyReach does not expose the message copy via API, so no preview.
+  return {
+    platform: "heyreach",
+    label,
+    subject: null,
+    preview: null,
+    available: false,
+  };
 }
 
 function normalizeConvo(c: RawConvo): Conversation {
@@ -291,41 +324,69 @@ export async function getConversations(): Promise<Conversation[]> {
     .sort((a, b) => (b.lastMessageAt ?? "").localeCompare(a.lastMessageAt ?? ""));
 }
 
+/** Fetch all leads (with connection/message status) for one campaign. */
+async function getCampaignLeads(campaignId: number): Promise<RawCampaignLead[]> {
+  const out: RawCampaignLead[] = [];
+  for (let offset = 0; offset < 10000; offset += 100) {
+    const resp = await post<CampaignLeadsResponse>(
+      "/campaign/GetLeadsFromCampaign",
+      { campaignId, offset, limit: 100 },
+    ).catch(() => ({ totalCount: 0, items: [] }) as CampaignLeadsResponse);
+    const items = resp.items ?? [];
+    out.push(...items);
+    if (items.length === 0 || out.length >= (resp.totalCount ?? out.length))
+      break;
+  }
+  return out;
+}
+
 /**
- * Prospects who replied to our outreach. We only count conversations tied to a
- * campaign (campaignId set) so unrelated inbound LinkedIn messages don't show
- * up as dealership prospects.
+ * LinkedIn prospects who engaged: connection accepted or replied. Reads
+ * per-lead status from each live campaign (GetLeadsFromCampaign), which is the
+ * reliable source for "who accepted a connection request."
  */
 export async function getEngagedProspects(
   campaignNames: Map<string, string>,
 ): Promise<Prospect[]> {
-  const raw = await fetchAllConvos();
+  const campaigns = await listRawCampaigns();
   const byId = new Map<string, Prospect>();
 
-  for (const c of raw) {
-    if (c.campaignId == null) continue; // skip non-campaign inbox threads
-    const msgs = c.messages ?? [];
-    const replied =
-      c.lastMessageSender === "CORRESPONDENT" ||
-      msgs.some((m) => m.sender === "CORRESPONDENT");
-    if (!replied) continue;
+  for (const camp of campaigns) {
+    const leads = await getCampaignLeads(camp.id);
+    for (const lead of leads) {
+      const connected = /accepted/i.test(lead.leadConnectionStatus ?? "");
+      const replied = /repl/i.test(lead.leadMessageStatus ?? "");
+      if (!connected && !replied) continue; // not engaged yet
 
-    const conv = normalizeConvo(c);
-    const cid = String(c.campaignId);
-    byId.set(conv.id, {
-      id: conv.id,
-      platform: "heyreach",
-      name: conv.name,
-      email: null,
-      company: conv.company,
-      title: conv.title,
-      campaignId: cid,
-      campaignName: campaignNames.get(cid) ?? null,
-      opened: false,
-      replied: true,
-      profileUrl: conv.profileUrl,
-      lastActivity: conv.lastMessageAt,
-    });
+      const p = lead.linkedInUserProfile ?? {};
+      const name =
+        [p.firstName, p.lastName].filter(Boolean).join(" ").trim() || "(unknown)";
+      const id = String(p.profileUrl ?? lead.id);
+      const cid = String(camp.id);
+
+      byId.set(id, {
+        id,
+        platform: "heyreach",
+        channels: ["heyreach"],
+        name,
+        email: null,
+        company: p.companyName?.trim() || null,
+        title: p.position?.trim() || null,
+        campaignId: cid,
+        campaignName: campaignNames.get(cid) ?? camp.name ?? null,
+        opened: false,
+        replied,
+        connected,
+        connectionStatus: connected
+          ? "Connection accepted"
+          : replied
+            ? "Replied"
+            : null,
+        nextMessage: nextLinkedInMessage(lead),
+        profileUrl: p.profileUrl ?? null,
+        lastActivity: lead.lastActionTime ?? null,
+      });
+    }
   }
 
   return [...byId.values()];
