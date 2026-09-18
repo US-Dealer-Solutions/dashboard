@@ -14,15 +14,33 @@ export function num(value: number): string {
  *   "USDS - F&I / Finance Track (TX dealerships)"  -> "F&I / Finance"
  *   "USDS - Track B (General Manager)"             -> "General Manager"
  *   "USDS - Track C (F&I Referral Network)"        -> "Referral Network"
- * Referral is checked first because those names also contain "F&I".
- * Falls back to the cleaned campaign name if no known track is found.
+ *   "USDS - TX Franchise Dealers (Registry)"       -> "TX Franchise Dealers"
+ * Referral is checked first because those names also contain "F&I". The
+ * franchise/registry audience is checked after the personas, so a name
+ * carrying both (e.g. "F&I - Franchise Dealers") still groups by persona.
+ * Anything unrecognized falls back to a tidied version of the campaign name.
  */
 export function trackFromName(name: string): string {
   const n = (name ?? "").toLowerCase();
   if (/referral/.test(n)) return "Referral Network";
   if (/general manager|\bgm\b|track b/.test(n)) return "General Manager";
   if (/f&i|f\/i|finance|track a/.test(n)) return "F&I / Finance";
-  return (name ?? "").trim() || "Other";
+  if (/franchise|registry/.test(n)) return "TX Franchise Dealers";
+  return tidyName(name);
+}
+
+/**
+ * Turns an unrecognized campaign name into a short group heading by dropping
+ * the "USDS - " prefix and a trailing qualifier like "(TX dealerships)", so a
+ * newly created campaign still gets a sensible track without a code change.
+ */
+function tidyName(name: string): string {
+  return (
+    (name ?? "")
+      .replace(/^\s*USDS\s*[-–—:]\s*/i, "")
+      .replace(/\s*\([^)]*\)\s*$/, "")
+      .trim() || "Other"
+  );
 }
 
 export function timeAgo(iso: string | null): string {
