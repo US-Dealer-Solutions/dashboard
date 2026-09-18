@@ -182,6 +182,8 @@ export async function getCampaigns(): Promise<Campaign[]> {
         opens,
         replies,
         connectionsAccepted: 0,
+        connectionsSent: 0,
+        connectionAcceptRate: 0,
         openRate: rate(opens, sent),
         replyRate: rate(replies, sent),
         bounced: a?.bounced_count ?? 0,

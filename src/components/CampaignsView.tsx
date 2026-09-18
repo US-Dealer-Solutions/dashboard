@@ -56,6 +56,9 @@ export default function CampaignsView({ campaigns }: { campaigns: Campaign[] }) 
                     <th className="px-4 py-3 text-right font-medium">Leads</th>
                     <th className="px-4 py-3 text-right font-medium">Sent</th>
                     <th className="px-4 py-3 text-right font-medium">Open rate</th>
+                    <th className="px-4 py-3 text-right font-medium">
+                      Accept rate
+                    </th>
                     <th className="px-4 py-3 text-right font-medium">Replies</th>
                     <th className="px-4 py-3 text-right font-medium">Reply rate</th>
                   </tr>
@@ -85,6 +88,19 @@ export default function CampaignsView({ campaigns }: { campaigns: Campaign[] }) 
                         {c.platform === "instantly" && !c.staged
                           ? pct(c.openRate)
                           : "—"}
+                      </td>
+                      <td className="px-4 py-3 text-right tabular-nums">
+                        {c.platform === "heyreach" && !c.staged ? (
+                          <>
+                            {pct(c.connectionAcceptRate)}
+                            <span className="ml-1 text-xs text-slate-500 dark:text-slate-400">
+                              ({num(c.connectionsAccepted)}/
+                              {num(c.connectionsSent)})
+                            </span>
+                          </>
+                        ) : (
+                          "—"
+                        )}
                       </td>
                       <td className="px-4 py-3 text-right tabular-nums">
                         {c.staged ? "—" : num(c.replies)}
@@ -118,11 +134,13 @@ export default function CampaignsView({ campaigns }: { campaigns: Campaign[] }) 
                     <Stat label="Leads" value={num(c.leads)} />
                     <Stat label="Sent" value={c.staged ? "—" : num(c.sent)} />
                     <Stat
-                      label="Open"
+                      label={c.platform === "heyreach" ? "Accept" : "Open"}
                       value={
-                        c.platform === "instantly" && !c.staged
-                          ? pct(c.openRate)
-                          : "—"
+                        c.staged
+                          ? "—"
+                          : c.platform === "heyreach"
+                            ? pct(c.connectionAcceptRate)
+                            : pct(c.openRate)
                       }
                     />
                     <Stat

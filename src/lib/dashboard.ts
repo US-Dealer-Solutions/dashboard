@@ -22,10 +22,13 @@ function totalsFor(campaigns: Campaign[], prospects: Prospect[]): Totals {
     t.opens += c.opens;
     t.replies += c.replies;
     t.connectionsAccepted += c.connectionsAccepted;
+    t.connectionsSent += c.connectionsSent;
     t.bounced += c.bounced;
   }
   t.openRate = t.sent > 0 ? t.opens / t.sent : 0;
   t.replyRate = t.sent > 0 ? t.replies / t.sent : 0;
+  t.connectionAcceptRate =
+    t.connectionsSent > 0 ? t.connectionsAccepted / t.connectionsSent : 0;
   t.prospectsOpened = prospects.filter((p) => p.opened).length;
   t.prospectsReplied = prospects.filter((p) => p.replied).length;
   t.prospectsConnected = prospects.filter((p) => p.connected).length;

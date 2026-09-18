@@ -25,9 +25,11 @@ export default function OverviewView({ data }: { data: DashboardData }) {
             sub={`${num(t.replies)} replies`}
           />
           <KpiCard
-            label="Connections"
-            value={num(t.connectionsAccepted)}
-            sub="accepted (LinkedIn)"
+            label="Connection rate"
+            value={pct(t.connectionAcceptRate)}
+            sub={`${num(t.connectionsAccepted)} of ${num(
+              t.connectionsSent,
+            )} accepted (LinkedIn)`}
           />
         </div>
       </section>
@@ -84,7 +86,14 @@ function PlatformPanel({
         <Row label="Reply rate" value={pct(totals.replyRate)} />
         {showOpens && <Row label="Open rate" value={pct(totals.openRate)} />}
         {showConnections && (
-          <Row label="Connections" value={num(totals.connectionsAccepted)} />
+          <>
+            <Row label="Requests sent" value={num(totals.connectionsSent)} />
+            <Row label="Accepted" value={num(totals.connectionsAccepted)} />
+            <Row
+              label="Acceptance rate"
+              value={pct(totals.connectionAcceptRate)}
+            />
+          </>
         )}
         <Row label="Replied prospects" value={num(totals.prospectsReplied)} />
       </dl>

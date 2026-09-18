@@ -241,6 +241,8 @@ export async function getCampaigns(): Promise<Campaign[]> {
     const s = stats[i].overallStats ?? {};
     const sent = s.messagesSent ?? 0;
     const replies = s.totalMessageReplies ?? 0;
+    const connectionsSent = s.connectionsSent ?? 0;
+    const connectionsAccepted = s.connectionsAccepted ?? 0;
     const name = c.name ?? "(untitled)";
     const leads =
       c.totalLeads ??
@@ -260,7 +262,11 @@ export async function getCampaigns(): Promise<Campaign[]> {
       sent,
       opens: 0, // not applicable to LinkedIn outreach
       replies,
-      connectionsAccepted: s.connectionsAccepted ?? 0,
+      connectionsAccepted,
+      connectionsSent,
+      // HeyReach reports the rate itself; fall back to computing it.
+      connectionAcceptRate:
+        s.connectionAcceptanceRate ?? rate(connectionsAccepted, connectionsSent),
       openRate: 0,
       replyRate: s.messageReplyRate ?? rate(replies, sent),
       bounced: 0,
@@ -282,6 +288,8 @@ export async function getCampaigns(): Promise<Campaign[]> {
       opens: 0,
       replies: 0,
       connectionsAccepted: 0,
+      connectionsSent: 0,
+      connectionAcceptRate: 0,
       openRate: 0,
       replyRate: 0,
       bounced: 0,

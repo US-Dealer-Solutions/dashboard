@@ -24,6 +24,10 @@ export interface Campaign {
   replies: number;
   /** Connection requests accepted (HeyReach only; 0 for Instantly). */
   connectionsAccepted: number;
+  /** Connection requests sent (HeyReach only; 0 for Instantly). */
+  connectionsSent: number;
+  /** Accepted / sent, 0..1 (HeyReach only). */
+  connectionAcceptRate: number;
   /** Open rate 0..1 (Instantly only). */
   openRate: number;
   /** Reply rate 0..1. */
@@ -131,9 +135,11 @@ export interface Totals {
   opens: number;
   replies: number;
   connectionsAccepted: number;
+  connectionsSent: number;
   bounced: number;
   openRate: number;
   replyRate: number;
+  connectionAcceptRate: number;
   prospectsOpened: number;
   prospectsReplied: number;
   prospectsConnected: number;
@@ -160,9 +166,11 @@ export function emptyTotals(): Totals {
     opens: 0,
     replies: 0,
     connectionsAccepted: 0,
+    connectionsSent: 0,
     bounced: 0,
     openRate: 0,
     replyRate: 0,
+    connectionAcceptRate: 0,
     prospectsOpened: 0,
     prospectsReplied: 0,
     prospectsConnected: 0,
