@@ -260,6 +260,8 @@ export async function getCampaigns(): Promise<Campaign[]> {
       staged: false,
       leads,
       sent,
+      contacted: s.uniqueLeadsContacted ?? 0,
+      openTracking: false,
       opens: 0, // not applicable to LinkedIn outreach
       replies,
       connectionsAccepted,
@@ -285,6 +287,8 @@ export async function getCampaigns(): Promise<Campaign[]> {
       staged: true,
       leads: l.totalItemsCount ?? 0,
       sent: 0,
+      contacted: 0,
+      openTracking: false,
       opens: 0,
       replies: 0,
       connectionsAccepted: 0,

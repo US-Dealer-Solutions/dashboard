@@ -16,8 +16,12 @@ export default function OverviewView({ data }: { data: DashboardData }) {
           <KpiCard label="Messages sent" value={num(t.sent)} />
           <KpiCard
             label="Open rate"
-            value={pct(t.openRate)}
-            sub={`${num(t.opens)} opens (email)`}
+            value={t.openTracking ? pct(t.openRate) : "Off"}
+            sub={
+              t.openTracking
+                ? `${num(t.opens)} opens (email)`
+                : "Open tracking disabled in Instantly"
+            }
           />
           <KpiCard
             label="Reply rate"
@@ -84,7 +88,12 @@ function PlatformPanel({
         <Row label="Sent" value={num(totals.sent)} />
         <Row label="Replies" value={num(totals.replies)} />
         <Row label="Reply rate" value={pct(totals.replyRate)} />
-        {showOpens && <Row label="Open rate" value={pct(totals.openRate)} />}
+        {showOpens && (
+          <Row
+            label="Open rate"
+            value={totals.openTracking ? pct(totals.openRate) : "Tracking off"}
+          />
+        )}
         {showConnections && (
           <>
             <Row label="Requests sent" value={num(totals.connectionsSent)} />

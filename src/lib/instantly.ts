@@ -92,6 +92,7 @@ interface RawCampaignListItem {
   id: string;
   name: string;
   status: number;
+  open_tracking?: boolean;
   sequences?: { steps?: RawSeqStep[] }[];
 }
 
@@ -131,9 +132,16 @@ async function listAllCampaigns(): Promise<RawCampaignListItem[]> {
   return out;
 }
 
-/** Count leads assigned to a campaign (drafts have no analytics lead count). */
-async function countLeads(campaignId: string): Promise<number> {
+/**
+ * Count a campaign's leads and how many have been contacted (have a last
+ * executed step). Analytics' contacted_count tracks emails, not leads, so we
+ * derive the per-lead denominator Instantly's UI uses from the lead list.
+ */
+async function leadStats(
+  campaignId: string,
+): Promise<{ total: number; contacted: number }> {
   let total = 0;
+  let contacted = 0;
   let cursor: string | null | undefined;
   // Cap at 20 pages (2,000 leads) to stay cheap; good enough for a count badge.
   for (let page = 0; page < 20; page++) {
@@ -143,11 +151,14 @@ async function countLeads(campaignId: string): Promise<number> {
       method: "POST",
       body,
     });
-    total += resp.items?.length ?? 0;
+    for (const lead of resp.items ?? []) {
+      total++;
+      if (lead.status_summary?.lastStep?.stepID) contacted++;
+    }
     cursor = resp.next_starting_after;
     if (!cursor) break;
   }
-  return total;
+  return { total, contacted };
 }
 
 /**
@@ -167,8 +178,11 @@ export async function getCampaigns(): Promise<Campaign[]> {
       const sent = a?.emails_sent_count ?? 0;
       const opens = a?.open_count_unique ?? a?.open_count ?? 0;
       const replies = a?.reply_count_unique ?? a?.reply_count ?? 0;
+      const stats = await leadStats(c.id).catch(() => null);
       // Prefer the analytics lead count; fall back to counting leads for drafts.
-      const leads = a?.leads_count ?? (await countLeads(c.id).catch(() => 0));
+      const leads = a?.leads_count ?? stats?.total ?? 0;
+      // Rates use unique leads contacted, like Instantly's UI; sent is a fallback.
+      const contacted = stats?.contacted || sent;
       const name = c.name ?? "(untitled)";
       return {
         id: c.id,
@@ -179,13 +193,15 @@ export async function getCampaigns(): Promise<Campaign[]> {
         staged: false,
         leads,
         sent,
+        contacted,
+        openTracking: c.open_tracking ?? false,
         opens,
         replies,
         connectionsAccepted: 0,
         connectionsSent: 0,
         connectionAcceptRate: 0,
-        openRate: rate(opens, sent),
-        replyRate: rate(replies, sent),
+        openRate: rate(opens, contacted),
+        replyRate: rate(replies, contacted),
         bounced: a?.bounced_count ?? 0,
       };
     }),

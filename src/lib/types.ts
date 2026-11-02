@@ -18,6 +18,10 @@ export interface Campaign {
   leads: number;
   /** Emails sent (Instantly) or messages sent (HeyReach). */
   sent: number;
+  /** Unique leads actually contacted (denominator for open/reply rate). */
+  contacted: number;
+  /** False when open tracking is disabled (always false for HeyReach). */
+  openTracking: boolean;
   /** Unique opens (Instantly only; 0 for HeyReach). */
   opens: number;
   /** Unique replies. */
@@ -28,9 +32,9 @@ export interface Campaign {
   connectionsSent: number;
   /** Accepted / sent, 0..1 (HeyReach only). */
   connectionAcceptRate: number;
-  /** Open rate 0..1 (Instantly only). */
+  /** Unique opens / leads contacted, 0..1 (Instantly only). */
   openRate: number;
-  /** Reply rate 0..1. */
+  /** Unique replies / leads contacted, 0..1. */
   replyRate: number;
   bounced: number;
 }
@@ -132,6 +136,10 @@ export interface Conversation {
 /** Aggregated KPI totals for the overview view. */
 export interface Totals {
   sent: number;
+  /** Rate denominator: leads contacted (falls back to sent per campaign). */
+  contacted: number;
+  /** True if at least one email campaign has open tracking enabled. */
+  openTracking: boolean;
   opens: number;
   replies: number;
   connectionsAccepted: number;
@@ -163,6 +171,8 @@ export interface DashboardData {
 export function emptyTotals(): Totals {
   return {
     sent: 0,
+    contacted: 0,
+    openTracking: false,
     opens: 0,
     replies: 0,
     connectionsAccepted: 0,

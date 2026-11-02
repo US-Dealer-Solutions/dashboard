@@ -85,9 +85,15 @@ export default function CampaignsView({ campaigns }: { campaigns: Campaign[] }) 
                         {c.staged ? "—" : num(c.sent)}
                       </td>
                       <td className="px-4 py-3 text-right tabular-nums">
-                        {c.platform === "instantly" && !c.staged
-                          ? pct(c.openRate)
-                          : "—"}
+                        {c.platform !== "instantly" || c.staged ? (
+                          "—"
+                        ) : c.openTracking ? (
+                          pct(c.openRate)
+                        ) : (
+                          <span className="text-xs text-slate-500 dark:text-slate-400">
+                            Tracking off
+                          </span>
+                        )}
                       </td>
                       <td className="px-4 py-3 text-right tabular-nums">
                         {c.platform === "heyreach" && !c.staged ? (
@@ -140,7 +146,9 @@ export default function CampaignsView({ campaigns }: { campaigns: Campaign[] }) 
                           ? "—"
                           : c.platform === "heyreach"
                             ? pct(c.connectionAcceptRate)
-                            : pct(c.openRate)
+                            : c.openTracking
+                              ? pct(c.openRate)
+                              : "Off"
                       }
                     />
                     <Stat

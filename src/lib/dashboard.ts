@@ -17,16 +17,24 @@ import {
 
 function totalsFor(campaigns: Campaign[], prospects: Prospect[]): Totals {
   const t = emptyTotals();
+  // Open rate only counts campaigns that actually track opens.
+  let opensContacted = 0;
   for (const c of campaigns) {
+    const contacted = c.contacted > 0 ? c.contacted : c.sent;
     t.sent += c.sent;
+    t.contacted += contacted;
+    if (c.openTracking) {
+      t.openTracking = true;
+      opensContacted += contacted;
+    }
     t.opens += c.opens;
     t.replies += c.replies;
     t.connectionsAccepted += c.connectionsAccepted;
     t.connectionsSent += c.connectionsSent;
     t.bounced += c.bounced;
   }
-  t.openRate = t.sent > 0 ? t.opens / t.sent : 0;
-  t.replyRate = t.sent > 0 ? t.replies / t.sent : 0;
+  t.openRate = opensContacted > 0 ? t.opens / opensContacted : 0;
+  t.replyRate = t.contacted > 0 ? t.replies / t.contacted : 0;
   t.connectionAcceptRate =
     t.connectionsSent > 0 ? t.connectionsAccepted / t.connectionsSent : 0;
   t.prospectsOpened = prospects.filter((p) => p.opened).length;
