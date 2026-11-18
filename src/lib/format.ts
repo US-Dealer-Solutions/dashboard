@@ -12,7 +12,8 @@ export function num(value: number): string {
  * Detects the audience/track a campaign or list targets from its name.
  * Matches the USDS naming across Instantly and HeyReach, e.g.
  *   "USDS - F&I / Finance Track (TX dealerships)"  -> "F&I / Finance"
- *   "USDS - Track B (General Manager)"             -> "General Manager"
+ *   "USDS - GM / General Manager Track (TX dealerships)" -> "General Manager"
+ *   "USDS - Sales / Sales Manager Track (TX dealerships)" -> "Sales"
  *   "USDS - Track C (F&I Referral Network)"        -> "Referral Network"
  *   "USDS - TX Franchise Dealers (Registry)"       -> "TX Franchise Dealers"
  * Referral is checked first because those names also contain "F&I". The
@@ -23,6 +24,7 @@ export function num(value: number): string {
 export function trackFromName(name: string): string {
   const n = (name ?? "").toLowerCase();
   if (/referral/.test(n)) return "Referral Network";
+  if (/sales manager|sales \//.test(n)) return "Sales";
   if (/general manager|\bgm\b|track b/.test(n)) return "General Manager";
   if (/f&i|f\/i|finance|track a/.test(n)) return "F&I / Finance";
   if (/franchise|registry/.test(n)) return "TX Franchise Dealers";
